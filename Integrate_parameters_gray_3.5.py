@@ -393,7 +393,7 @@ class Processing_HUB(QObject):
             img = self.qimg_2_array(frame)
             for seed in self.seeds:
                 center = (int(seed[1]), int(seed[0]))  # Assuming seed is a tuple (y, x)
-                radius = 10  # Adjust the radius as needed
+                radius = 30  # Adjust the radius as needed
                 cv2.circle(img, center, radius, self.White, -1)  # Draw a filled circle
             return self.array_2_qimg(img)
         else:
@@ -415,10 +415,6 @@ class Processing_HUB(QObject):
             new_frame=self.qimg_2_array(frame)
             self.temp_seeds = vp.seeds_init(new_frame ,wnd_size=int(self.slider_value_2), method=self.method,stp_size=int(self.slider_value_3),
                                                         max_wnd=int(self.slider_value_4), diff_thres=int(self.slider_value_5))
-            if self.temp_seeds is not None:
-                print(self.temp_seeds)
-            else:
-                print('No seeds where generated')
             return frame
 
     
@@ -827,7 +823,7 @@ class Save_changes_2_xarray(QThread):
         def initA_wrapper(self, frame):
             if  hasattr(self, 'seeds'):
                 self.A = vp.initA(self.data_array, self.seeds, self.value_2, int(self.value_3), self.value)
-                self.initC_wrapper()
+                self.initC_wrapper(frame)
             return frame
 
         def initC_wrapper(self, frame):

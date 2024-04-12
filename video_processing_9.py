@@ -2070,7 +2070,7 @@ def initA(
             tgt_nods["height"].values,
             tgt_nods["width"].values,
         )
-        cur_corr = pd.concat([src_corr, tgt_corr]).append(
+        cur_corr = pd.concat([src_corr, tgt_corr])._append(
             {"corr": 1, "height": sd["height"], "width": sd["width"]}, ignore_index=True
         )
         cur_corr["iheight"] = cur_corr["height"].map(ih_dict)

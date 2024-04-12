@@ -1377,9 +1377,8 @@ def seeds_init(
         max_res = save_minian(max_res.rename("max_res"), dpath, overwrite=True)
     else:
         max_res = varr
-
     print("calculating local maximum")
-    if nfm!=1:
+    if nfm != 1:
         loc_max = xr.apply_ufunc(
             local_max_roll,
             max_res,
@@ -1390,15 +1389,29 @@ def seeds_init(
             output_dtypes=[np.uint8],
             kwargs=dict(k0=2, k1=max_wnd, diff=diff_thres),
         ).sum("sample")
+        if not isinstance(loc_max, xr.DataArray):  # Check if loc_max is already a DataArray
+            loc_max = xr.DataArray(loc_max, dims=["height", "width"])
         seeds = (
-            loc_max.where(loc_max > 0).rename("seeds").to_dataframe().dropna().reset_index()
+            loc_max.where(loc_max > 0, drop=True)
+            .rename("seeds")
+            .to_dataframe()
+            .dropna()
+            .reset_index()
         )
     else:
-        if max_wnd<=1:
-            max_wnd=10
-        local_max_roll(max_res, k0=1, k1=max_wnd, diff=diff_thres)
+        if max_wnd <= 1:
+            max_wnd = 100
+        loc_max = local_max_roll(max_res, k0=1, k1=max_wnd, diff=diff_thres)
+        if not isinstance(loc_max, xr.DataArray):  # Check if loc_max is already a DataArray
+            loc_max = xr.DataArray(loc_max, dims=["height", "width"])
+        seeds = (
+            loc_max.where(loc_max > 0, drop=True)
+            .rename("seeds")
+            .to_dataframe()
+            .dropna()
+            .reset_index()
+        )
     return seeds[["height", "width", "seeds"]]
-
 
 def max_proj_frame(varr: xr.DataArray, idx: np.ndarray) -> xr.DataArray:
     """

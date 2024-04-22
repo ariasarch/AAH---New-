@@ -1,0 +1,19 @@
+﻿function,p1,v1,p2,v2,p3,v3,p4,v4,p5,v5
+save_minian,dpath,minian_ds_path,meta_dict,"dict(session=-1, animal=-2)",overwrite,TRUE,,,,
+load,,,,,,,,,,
+denoise,method,median,ksize,7,,,,,,
+background_removal,method,tophat,wnd,15,,,,,,
+estimate_motion,dim,frame,,,,,,,,
+seeds_init,wnd_size,1000,method,rolling,stp_size,500,max_wnd,15,diff_thres,3
+pnr_refine,noise_freq,0.06,thres,1,,,,,,
+ks_refine,sig,0.05,,,,,,,,
+seeds_merge,thres_dist,10,thres_corr,0.8,noise_freq,0.06,,,,
+initialize,thres_corr,0.8,wnd,10,noise_freq,0.06,,,,
+init_merge,thres_corr,0.8,,,,,,,,
+get_noise,noise_range,"(0.06, 0.5)",Nan,Nan,Nan,Nan,Nan,Nan,Nan,Nan
+first_spatial,dl_wnd,10,sparse_penal,0.01,size_thres,"(25, None)",Nan,Nan,Nan,Nan
+first_temporal,noise_freq,0.06,sparse_penal,1,p,1,add_lag,20,jac_thres,0.2
+first_merge,thres_corr,0.8,Nan,Nan,Nan,Nan,Nan,Nan,Nan,Nan
+second_spatial,dl_wnd,10,sparse_penal,0.01,size_thres,"(25, None)",Nan,Nan,Nan,Nan
+second_temporal,noise_freq,0.06,sparse_penal,1,p,1,add_lag,20,jac_thres,0.4
+remove_glow,deglow,TRUE,,,,,,,,

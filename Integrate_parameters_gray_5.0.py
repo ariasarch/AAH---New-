@@ -245,7 +245,7 @@ class Processing_HUB(QObject):
                             self.parameter_list.loc[funct_name, self.col_names[col_index]] = self.parameters[inx]
                     else:
                         print(f"Column index {col_index} out of bounds for function {funct_name}")
-            print(self.parameter_list.loc[funct_name, :])
+            # print(self.parameter_list.loc[funct_name, :])
             print('Current function is ' + str(self.function_names[self.current_function_index]))
 
     def update_button_indx(self, button_index):
@@ -254,7 +254,6 @@ class Processing_HUB(QObject):
 
     def get_method(self, value):
         self.method=value
-        print(value)
 
     def get_init_val(self,value_init):
         self.slider_value=value_init
@@ -486,7 +485,6 @@ class Processing_HUB(QObject):
     def update_button_indx(self, button_index):
         self.current_function_index= button_index
         self.allow_funct=False
-        # print('The button_index from Processing_HUB is '+str(self.current_function_index))
 
     def update_data_array(self, data_array):
         self.data_array=data_array
@@ -665,11 +663,11 @@ class Save_changes_2_xarray(QThread):
         def run(self):
             if self.parameters is not None and self.parameters !=[]:
                 self.parameters_unpacking()
+                time.sleep(0.1)
             if self.data_array is not None and len(self.data_array) > 0:
                self.apply_changes()
             else:
                 print('Failed to pass data_array to Save_changes_2_xarray')
-
         def apply_changes(self):
             self.current_function(self.data_array[0].values)
             print('Changes saved for ' + str(self.function_index))
@@ -692,7 +690,6 @@ class Save_changes_2_xarray(QThread):
             if self.parameters is not None and len(self.parameters)!=0:
                 print(self.parameters)
                 self.value=self.parameters[0]
-                print('1st passed value is '+ str(self.value))
             else:
                 print('Parameters not obtained by Save_changes_2_xarray')
             if len(self.parameters)==2:
@@ -725,13 +722,11 @@ class Save_changes_2_xarray(QThread):
             elif self.function_index == 6:
                 return self.ks_refine_wrapper(frame)
             elif self.function_index == 7:
-                self.seeds_merge_wrapper(frame)  # Again, assuming updates internal state
-                return frame
+                return self.seeds_merge_wrapper(frame)
             elif self.function_index == 8:
                 return self.initA_wrapper(frame)
             elif self.function_index == 9:
-                self.unit_merge_wrapper(frame)  # Assuming updates internal state
-                return frame
+                return self.unit_merge_wrapper(frame) 
             elif self.function_index == 10:
                 return self.get_noise_fft_wrapper(frame)
             elif self.function_index == 11:
@@ -820,24 +815,24 @@ class Save_changes_2_xarray(QThread):
             if hasattr(self, 'seeds'):
                 self.seeds_ks = vp.ks_refine(self.seed_array, self.seeds, self.value)
                 print('After KS refinement there are this many seeds: ' +str(len(self.seeds)))
-                print(self.seeds)
             else:
                 print("No frame or seeds available for KS refinement.")
             return frame
     
         def seeds_merge_wrapper(self, frame): # Need to pass both self.seeds_ks and self.seeds_pnr
             if hasattr(self, 'seeds'):
+                        if self.value_2 is None:
+                            self.value_2=0.06
+                            print('Threshold value not being set')
                         merge_parameters = {'thres_dist':self.value_3, 'thres_corr': self.value_2,'noise_freq':self.value}
                         seeds_final=self.seeds[self.seeds["mask_pnr"] & self.seeds["mask_ks"]].reset_index(drop=True)
                         self.max_proj=self.data_array.max("frame")
                         self.seeds = vp.seeds_merge(self.seed_array,self.max_proj, seeds_final, **merge_parameters)
-                        print(self.seeds)
             else:
                 print('No seeds to merge')
             return frame
 
         def initA_wrapper(self, frame):
-            print(type(self.seeds))
             if  hasattr(self, 'seeds'):
                 self.A = vp.initA(self.seed_array, self.seeds[self.seeds["mask_mrg"]], self.value_2, int(self.value_3), self.value) 
                 self.initC_wrapper(frame)

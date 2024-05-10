@@ -372,7 +372,7 @@ class Processing_HUB(QObject):
             if self.current_function_index in self.interval_sliders and self.method is not None:
                 new_interval = (float(self.parameters[-1]), self.method)
                 self.parameters[-1] = new_interval  # Convert interval_sliders to string and append
-        print(self.parameters)
+        # print(self.parameters)
         
     def denoise(self, frame):
         frame=self.qimg_2_array(frame)
@@ -688,17 +688,19 @@ class Save_changes_2_xarray(QThread):
         
         def parameters_unpacking(self):
             if self.parameters is not None and len(self.parameters)!=0:
-                print(self.parameters)
+                print('Parameters are: ',self.parameters)
+                print('The length of the parameter array is: ', len(self.parameters))
                 self.value=self.parameters[0]
             else:
                 print('Parameters not obtained by Save_changes_2_xarray')
-            if len(self.parameters)==2:
+            if len(self.parameters)>=2:
                 self.value_2=self.parameters[1] 
-            if len(self.parameters)==3:
+                print('The second value is', self.value_2)
+            if len(self.parameters)>=3:
                 self.value_3=self.parameters[2]
-            if len(self.parameters)==4:
+            if len(self.parameters)>=4:
                 self.value_4=self.parameters[3]
-            if len(self.parameters)==5:
+            if len(self.parameters)>=5:
                 self.value_5=self.parameters[4]
                 
         def current_function(self, frame):

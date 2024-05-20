@@ -2053,7 +2053,6 @@ def initA(
             )
         )
         A_ls.append(cur_A)
-        print(type(A_ls),A_ls)
     A = xr.DataArray(
         darr.stack(A_ls).map_blocks(lambda a: a.todense(), dtype=float),
         dims=["unit_id", "height", "width"],
@@ -4881,7 +4880,7 @@ def update_background(
     ).persist()
     return b_new, f_new
 
-@darr.as_gufunc(signature="(m,n),(m)->(n)", output_dtypes=float) # If problems with initC try adding ,  allow_rechunk=True
+@darr.as_gufunc(signature="(m,n),(m)->(n)", output_dtypes=float, allow_rechunk=True) # If problems with initC try adding ,  allow_rechunk=True
 def sps_lstsq(a: scipy.sparse.csc_matrix, b: np.ndarray, **kwargs):
     out = np.zeros((b.shape[0], a.shape[1]))
     for i in range(b.shape[0]):

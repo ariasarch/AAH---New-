@@ -1,7 +1,7 @@
 import sys
-import time
 import os
-os.environ['PATH']+= 'C:\\Users\\heather\\.conda\\envs\\minian_ari\\Library\\bin'
+import time
+os.environ['PATH'] += ';C:\\Users\\creat\\miniconda3\\envs\\minian_ari\\Library\\bin'
 from PyQt5.QtCore import Qt, QObject, QRunnable, QThreadPool, QThread, pyqtSignal, pyqtSlot, QRect
 
 import numpy as np
@@ -22,7 +22,7 @@ from xarray import DataArray
 import os.path
 import rechunker
 from uuid import uuid4
-import VSC_Minian_demo_videos_v5 as VSC
+import VSC_Minian_demo_videos_v8 as VSC
 
 # Handles communication to and from subprocesses such as Play_video and Save_changes_2_xarray
 # and communication to and from user inputs from MainWindow
@@ -99,7 +99,7 @@ class Processing_HUB(QObject):
         self.folder_file_path=file_path_2
 
     def call_VSC_minian(self):
-        # VSC.run_minian(self.csv_file_path, self.folder_file_path) ### Function to be created that passes (parameter_path, video_folder_path)
+        VSC.run_minian(self.csv_file_path, self.folder_file_path) ### Function to be created that passes (parameter_path, video_folder_path)
         print('Running minian')
 
     def get_initial_video(self):

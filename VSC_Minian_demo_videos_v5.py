@@ -357,8 +357,8 @@ def run_minian(param_path, vid_path):
         start_time = time.time() 
 
         # Generate side-by-side Comparison 
-        vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
-        write_video(vid_arr, "minian_mc.mp4", dpath)
+        # vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
+        # write_video(vid_arr, "minian_mc.mp4", dpath)
 
         # Save Max Projection 
         max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()

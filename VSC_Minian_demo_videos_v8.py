@@ -145,7 +145,7 @@ def initialize_dask():
 
 def process_chunk(Y, i, chk, param_save_minian, param_dict):
     Y_fm_chk = save_minian(Y.astype(float).rename(f"Y_fm_chk_{i}"), intpath, overwrite=True)
-    Y_hw_chk = save_minian(Y_fm_chk.rename(f"Y_hw_chk_{i}"), intpath, overwrite=True, chunks={"frame": 100, "height": chk["height"], "width": chk["width"]})
+    Y_hw_chk = save_minian(Y_fm_chk.rename(f"Y_hw_chk_{i}"), intpath, overwrite=True, chunks={"frame": -1, "height": chk["height"], "width": chk["width"]})
 
     param_seeds_init = param_dict['seeds_init']
 
@@ -175,8 +175,8 @@ def process_chunk(Y, i, chk, param_save_minian, param_dict):
     # Step 10: Generating Single ROIs 
     start_time = time.time() 
     # Save Max Projection 
-    max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()
-
+    max_proj = save_minian(Y_fm_chk.max("frame").rename(f"max_proj_{i}"), **param_save_minian).compute()
+    #Y_hw_chk=Y_hw_chk.chunk({"frame": -1})
     # Set Seed Initializtion
     seeds = seeds_init(Y_fm_chk, **param_seeds_init)
 

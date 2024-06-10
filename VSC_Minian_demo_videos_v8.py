@@ -143,14 +143,37 @@ def initialize_dask():
 
     return client, cluster
 
-def process_chunk(Y, i):
-    Y_fm_chk = save_minian(Y.astype(float).rename("Y_fm_chk"), intpath, overwrite=True)
-    Y_hw_chk+i = save_minian(Y_fm_chk.rename("Y_hw_chk"), intpath, overwrite=True, chunks={"frame": chk["frame"], "height": chk["height"], "width": chk["width"]})
+def process_chunk(Y, i, chk, param_save_minian, param_dict):
+    Y_fm_chk = save_minian(Y.astype(float).rename(f"Y_fm_chk_{i}"), intpath, overwrite=True)
+    Y_hw_chk = save_minian(Y_fm_chk.rename(f"Y_hw_chk_{i}"), intpath, overwrite=True, chunks={"frame": 100, "height": chk["height"], "width": chk["width"]})
+
+    param_seeds_init = param_dict['seeds_init']
+
+    param_pnr_refine = param_dict['pnr_refine']
+    param_ks_refine = param_dict['ks_refine']
+    param_seeds_merge = param_dict['seeds_merge']
+    param_initialize = param_dict['initialize']
+    param_init_merge = param_dict['init_merge']
+
+    # CNMF (Constrained Non-negative Matrix Factorization) Parameters
+    param_get_noise = param_dict['get_noise']
+
+    # Parameters for the first spatial update
+    param_first_spatial = param_dict['first_spatial']
+
+    # Parameters for the first temporal update
+    param_first_temporal = param_dict['first_temporal']
+
+    param_first_merge = param_dict['first_merge']
+
+    # Parameters for the second spatial update
+    param_second_spatial = param_dict['second_spatial']
+
+    # Parameters for the second temporal update
+    param_second_temporal = param_dict['second_temporal']
 
     # Step 10: Generating Single ROIs 
-
     start_time = time.time() 
-
     # Save Max Projection 
     max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()
 
@@ -525,7 +548,7 @@ def run_minian(param_path, vid_path):
 
     # here split the video into smaller videos
     # Define the number of frames per smaller video
-    frames_per_split = 100  # Example: 100 frames per split
+    frames_per_split = 100 
     chunk_futures = []
 
     def split_and_save_xarray(xarray, frames_per_split):
@@ -543,7 +566,7 @@ def run_minian(param_path, vid_path):
             
             # Save the split xarray
             #Y_split = save_minian(Y.rename("split_xarray"), dpath=intpath, overwrite=True)
-            future = client.submit(process_chunk, split_xarray)
+            future = client.submit(process_chunk, split_xarray, i, chk, param_save_minian, param_dict)
             chunk_futures.append(future)
 
         return chunk_futures

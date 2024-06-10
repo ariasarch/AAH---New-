@@ -6,7 +6,6 @@
 # Step 1: Import Necessary Modules 
 
 import time
-import math
 start_time_total = time.time()
 
 import csv
@@ -335,216 +334,190 @@ def run_minian(param_path, vid_path):
 
     # %%
 
-    # method to split video into smaller videos for dask computation
-    def split_video(video_clip, chunk_size):
-        num_chunks = math.ceil(video_clip.duration / chunk_size)
-        chunked_videos = []
-        for i in range(num_chunks):
-            start_time = i * chunk_size
-            end_time = min((i + 1) * chunk_size, video_clip.duration)
-            chunked_videos.append(video_clip.subclip(start_time, end_time))
-        return chunked_videos
+    # Step 10: Generating Single ROIs 
 
-    chunk_size = 10  # chunks of 10 seconds
-    chunked_videos = split_video(video_clip, chunk_size)
+    start_time = time.time() 
 
-    # client, cluster = initialize_dask()
+    # Generate side-by-side Comparison 
+    vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
+    write_video(vid_arr, "minian_mc.mp4", dpath)
 
-    # does steps 10+ on smaller videos
-    def process_chunk(chunked_video):
-        # Step 10: Generating Single ROIs 
-
-        start_time = time.time() 
-
-        # Generate side-by-side Comparison 
-        # vid_arr = xr.concat([varr_ref, Y_fm_chk], "width").chunk({"width": -1})
-        # write_video(vid_arr, "minian_mc.mp4", dpath)
-
-        # Save Max Projection 
-        max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()
-        
-        # Set Seed Initializtion
-        seeds = seeds_init(Y_fm_chk, **param_seeds_init)
-
-        # Update via pnr_refine
-        seeds, pnr, gmm = pnr_refine(Y_hw_chk, seeds, **param_pnr_refine) # thres = auto assumes a Guassian Mixture Model
-
-        if gmm:
-            display(visualize_gmm_fit(pnr, gmm, 100))
-        else:
-            print("nothing to show")
-
-        # Refine via a Kolmogorov-Smirnov test
-        seeds = ks_refine(Y_hw_chk, seeds, **param_ks_refine)
-
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 10 Complete\033[0m")
-
-        # %%
-
-        # Step 11: Initializing CNMF
-
-        start_time = time.time() 
-
-        seeds_final = seeds[seeds["mask_ks"] & seeds["mask_pnr"]].reset_index(drop=True)
-        seeds_final = seeds_merge(Y_hw_chk, max_proj, seeds_final, **param_seeds_merge)
-
-        A_init = initA(Y_hw_chk, seeds_final[seeds_final["mask_mrg"]], **param_initialize)
-        A_init = save_minian(A_init.rename("A_init"), intpath, overwrite=True)
-
-        C_init = initC(Y_fm_chk, A_init)
-        C_init = save_minian(C_init.rename("C_init"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
-
-        A, C = unit_merge(A_init, C_init, **param_init_merge)
-        A = save_minian(A.rename("A"), intpath, overwrite=True)
-        C = save_minian(C.rename("C"), intpath, overwrite=True)
-        C_chk = save_minian(C.rename("C_chk"),intpath,overwrite=True,chunks={"unit_id": -1, "frame": chk["frame"]})
-
-        b, f = update_background(Y_fm_chk, A, C_chk)
-        f = save_minian(f.rename("f"), intpath, overwrite=True)
-        b = save_minian(b.rename("b"), intpath, overwrite=True)
-        
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 11 Complete\033[0m")
-
-        # %%
-
-        # Step 12: Estimating Spatial Noise for CNMF
-
-        start_time = time.time() 
-
-        sn_spatial = get_noise_fft(Y_hw_chk, **param_get_noise)
-        sn_spatial = save_minian(sn_spatial.rename("sn_spatial"), intpath, overwrite=True)
-        
-        A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_first_spatial)
-        C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
-        C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
-        b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
-
-        A = save_minian(
-            A_new.rename("A"),
-            intpath,
-            overwrite=True,
-            chunks={"unit_id": 1, "height": -1, "width": -1},
-        )
-        b = save_minian(b_new.rename("b"), intpath, overwrite=True)
-        f = save_minian(
-            f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True
-        )
-        C = save_minian(C_new.rename("C"), intpath, overwrite=True)
-        C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
-
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 12 Complete\033[0m")
-        
-        # %%
-
-        # Step 13: Estimating Temporal Activity for CNMF
-        
-        start_time = time.time() 
-
-        YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
-        C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_second_temporal)
-
-        # Save Units
-        C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
-        S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        A = A.sel(unit_id=C.coords["unit_id"].values)
-
-        A_mrg, C_mrg, [sig_mrg] = unit_merge(A, C, [C + b0 + c0], **param_first_merge)
-
-        # Save Merged Units
-        A = save_minian(A_mrg.rename("A_mrg"), intpath, overwrite=True)
-        C = save_minian(C_mrg.rename("C_mrg"), intpath, overwrite=True)
-        C_chk = save_minian(C.rename("C_mrg_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]},)
-        sig = save_minian(sig_mrg.rename("sig_mrg"), intpath, overwrite=True)
-        
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 13 Complete\033[0m")
-
-        # %%
-
-        # Step 14: Performing Second Spatial Update for CNMF
-        
-        start_time = time.time() 
-
-        A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_second_spatial)
-        C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
-        C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
-
-        b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
-
-        # Save Results
-        A = save_minian(A_new.rename("A"), intpath, overwrite=True, chunks={"unit_id": 1, "height": -1, "width": -1},)
-        b = save_minian(b_new.rename("b"), intpath, overwrite=True)
-        f = save_minian(f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True)
-        C = save_minian(C_new.rename("C"), intpath, overwrite=True)
-        C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
-        
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 14 Complete\033[0m")
-
-        # %%
-
-        # Step 15: Performing Second Temporal Update for CNMF
-        
-        start_time = time.time() 
-
-        YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
-        C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_second_temporal)
-        
-        # Save Results 
-        C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
-        S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
-        A = A.sel(unit_id=C.coords["unit_id"].values)
-
-        # Visualization 
-        generate_videos(varr.sel(subset), Y_fm_chk, A=A, C=C_chk, vpath=dpath)
-            
-        elapsed_time = time.time() - start_time
-        print(f"Time taken: {elapsed_time:.2f} seconds")
-
-        print("\033[1;32mStep 15 Complete\033[0m")
-
-        # %%
-
-        # Step 16: Saving Results
-        
-        start_time = time.time()
-
-        A = save_minian(A.rename("A"), **param_save_minian)
-        C = save_minian(C.rename("C"), **param_save_minian)
-        S = save_minian(S.rename("S"), **param_save_minian)
-        c0 = save_minian(c0.rename("c0"), **param_save_minian)
-        b0 = save_minian(b0.rename("b0"), **param_save_minian)
-        b = save_minian(b.rename("b"), **param_save_minian)
-        f = save_minian(f.rename("f"), **param_save_minian)
+    # Save Max Projection 
+    max_proj = save_minian(Y_fm_chk.max("frame").rename("max_proj"), **param_save_minian).compute()
     
-    # process each chunked video using Dask
-    futures = client.map(process_chunk, chunked_videos)
+    # Set Seed Initializtion
+    seeds = seeds_init(Y_fm_chk, **param_seeds_init)
 
-    # wait for all futures to complete
-    results = client.gather(futures)
+    # Update via pnr_refine
+    seeds, pnr, gmm = pnr_refine(Y_hw_chk, seeds, **param_pnr_refine) # thres = auto assumes a Guassian Mixture Model
 
-    # UNSURE ABOUT THIS PART: combine the processed smaller videos back into the large video
-    combined_video = concatenate_videoclips(results)
+    if gmm:
+        display(visualize_gmm_fit(pnr, gmm, 100))
+    else:
+        print("nothing to show")
 
+    # Refine via a Kolmogorov-Smirnov test
+    seeds = ks_refine(Y_hw_chk, seeds, **param_ks_refine)
+
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 10 Complete\033[0m")
+
+    # %%
+
+    # Step 11: Initializing CNMF
+
+    start_time = time.time() 
+
+    seeds_final = seeds[seeds["mask_ks"] & seeds["mask_pnr"]].reset_index(drop=True)
+    seeds_final = seeds_merge(Y_hw_chk, max_proj, seeds_final, **param_seeds_merge)
+
+    A_init = initA(Y_hw_chk, seeds_final[seeds_final["mask_mrg"]], **param_initialize)
+    A_init = save_minian(A_init.rename("A_init"), intpath, overwrite=True)
+
+    C_init = initC(Y_fm_chk, A_init)
+    C_init = save_minian(C_init.rename("C_init"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
+
+    A, C = unit_merge(A_init, C_init, **param_init_merge)
+    A = save_minian(A.rename("A"), intpath, overwrite=True)
+    C = save_minian(C.rename("C"), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_chk"),intpath,overwrite=True,chunks={"unit_id": -1, "frame": chk["frame"]})
+
+    b, f = update_background(Y_fm_chk, A, C_chk)
+    f = save_minian(f.rename("f"), intpath, overwrite=True)
+    b = save_minian(b.rename("b"), intpath, overwrite=True)
+    
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 11 Complete\033[0m")
+
+    # %%
+
+    # Step 12: Estimating Spatial Noise for CNMF
+
+    start_time = time.time() 
+
+    sn_spatial = get_noise_fft(Y_hw_chk, **param_get_noise)
+    sn_spatial = save_minian(sn_spatial.rename("sn_spatial"), intpath, overwrite=True)
+    
+    A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_first_spatial)
+    C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
+    C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
+    b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
+
+    A = save_minian(
+        A_new.rename("A"),
+        intpath,
+        overwrite=True,
+        chunks={"unit_id": 1, "height": -1, "width": -1},
+    )
+    b = save_minian(b_new.rename("b"), intpath, overwrite=True)
+    f = save_minian(
+        f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True
+    )
+    C = save_minian(C_new.rename("C"), intpath, overwrite=True)
+    C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
+
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 12 Complete\033[0m")
+    
+    # %%
+
+    # Step 13: Estimating Temporal Activity for CNMF
+    
+    start_time = time.time() 
+
+    YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
+    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_second_temporal)
+
+    # Save Units
+    C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
+    S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    A = A.sel(unit_id=C.coords["unit_id"].values)
+
+    A_mrg, C_mrg, [sig_mrg] = unit_merge(A, C, [C + b0 + c0], **param_first_merge)
+
+    # Save Merged Units
+    A = save_minian(A_mrg.rename("A_mrg"), intpath, overwrite=True)
+    C = save_minian(C_mrg.rename("C_mrg"), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_mrg_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]},)
+    sig = save_minian(sig_mrg.rename("sig_mrg"), intpath, overwrite=True)
+    
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 13 Complete\033[0m")
+
+    # %%
+
+    # Step 14: Performing Second Spatial Update for CNMF
+    
+    start_time = time.time() 
+
+    A_new, mask, norm_fac = update_spatial(Y_hw_chk, A, C, sn_spatial, **param_second_spatial)
+    C_new = save_minian((C.sel(unit_id=mask) * norm_fac).rename("C_new"), intpath, overwrite=True)
+    C_chk_new = save_minian((C_chk.sel(unit_id=mask) * norm_fac).rename("C_chk_new"), intpath, overwrite=True)
+
+    b_new, f_new = update_background(Y_fm_chk, A_new, C_chk_new)
+
+    # Save Results
+    A = save_minian(A_new.rename("A"), intpath, overwrite=True, chunks={"unit_id": 1, "height": -1, "width": -1},)
+    b = save_minian(b_new.rename("b"), intpath, overwrite=True)
+    f = save_minian(f_new.chunk({"frame": chk["frame"]}).rename("f"), intpath, overwrite=True)
+    C = save_minian(C_new.rename("C"), intpath, overwrite=True)
+    C_chk = save_minian(C_chk_new.rename("C_chk"), intpath, overwrite=True)
+    
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 14 Complete\033[0m")
+
+    # %%
+
+    # Step 15: Performing Second Temporal Update for CNMF
+    
+    start_time = time.time() 
+
+    YrA = save_minian(compute_trace(Y_fm_chk, A, b, C_chk, f).rename("YrA"), intpath, overwrite=True, chunks={"unit_id": 1, "frame": -1})
+    C_new, S_new, b0_new, c0_new, g, mask = update_temporal(A, C, YrA=YrA, **param_second_temporal)
+    
+    # Save Results 
+    C = save_minian(C_new.rename("C").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    C_chk = save_minian(C.rename("C_chk"), intpath, overwrite=True, chunks={"unit_id": -1, "frame": chk["frame"]})
+    S = save_minian(S_new.rename("S").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    b0 = save_minian(b0_new.rename("b0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    c0 = save_minian(c0_new.rename("c0").chunk({"unit_id": 1, "frame": -1}), intpath, overwrite=True)
+    A = A.sel(unit_id=C.coords["unit_id"].values)
+
+    # Visualization 
+    generate_videos(varr.sel(subset), Y_fm_chk, A=A, C=C_chk, vpath=dpath)
+        
+    elapsed_time = time.time() - start_time
+    print(f"Time taken: {elapsed_time:.2f} seconds")
+
+    print("\033[1;32mStep 15 Complete\033[0m")
+
+    # %%
+
+    # Step 16: Saving Results
+    
+    start_time = time.time()
+
+    A = save_minian(A.rename("A"), **param_save_minian)
+    C = save_minian(C.rename("C"), **param_save_minian)
+    S = save_minian(S.rename("S"), **param_save_minian)
+    c0 = save_minian(c0.rename("c0"), **param_save_minian)
+    b0 = save_minian(b0.rename("b0"), **param_save_minian)
+    b = save_minian(b.rename("b"), **param_save_minian)
+    f = save_minian(f.rename("f"), **param_save_minian)
+    
     client.close()
     cluster.close()
 

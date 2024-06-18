@@ -202,7 +202,11 @@ def process_chunk(Y, i, chk, param_save_minian, param_dict):
 
     start_time = time.time() 
 
+    print("before seeds_final update")
+
     seeds_final = seeds[seeds["mask_ks"] & seeds["mask_pnr"]].reset_index(drop=True)
+
+    print("before seeds_final2 update")
     seeds_final = seeds_merge(Y_hw_chk, max_proj, seeds_final, **param_seeds_merge)
 
     A_init = initA(Y_hw_chk, seeds_final[seeds_final["mask_mrg"]], **param_initialize)
@@ -558,6 +562,7 @@ def run_minian(param_path, vid_path):
         for i in range(num_splits):
             start_frame = i * frames_per_split
             end_frame = min(start_frame + frames_per_split, total_frames)
+            
             
             split_xarray = xarray.sel(frame=slice(start_frame, end_frame))
             
